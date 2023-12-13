@@ -1,0 +1,11 @@
+pscripts/
+.vimsetup/
+build/
+bin/
+.cache/
+compile_commands.json
+.vscode/
+*.elf
+.vs/
+.idea/
+pspremote/
