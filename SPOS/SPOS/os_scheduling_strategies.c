@@ -50,7 +50,6 @@ void os_resetProcessSchedulingInformation(ProcessID id) {
  *  \return The next process to be executed determined on the basis of the even strategy.
  */
 ProcessID os_Scheduler_Even(const Process processes[], ProcessID current) {
-#warning IMPLEMENT STH. HERE
     return 0;
 }
 
@@ -63,7 +62,7 @@ ProcessID os_Scheduler_Even(const Process processes[], ProcessID current) {
  *  \return The next process to be executed determined on the basis of the random strategy.
  */
 ProcessID os_Scheduler_Random(const Process processes[], ProcessID current) {
-#warning IMPLEMENT STH. HERE
+
     return 0;
 }
 
