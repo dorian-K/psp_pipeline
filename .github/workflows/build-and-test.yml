@@ -1,0 +1,105 @@
+name: Build and Test
+
+on:
+  push:
+    paths:
+      - '**/*'
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  makedocker:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      imgurl: ${{ steps.meta.outputs.tags }}
+      imgid: ${{ steps.buildpush.outputs.imageid }}
+    steps:
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Get Simulator Version
+        id: get-ver
+        run: |
+          echo "shash=$(git ls-remote https://github.com/buserror/simavr.git HEAD | head -c 12)" >> $GITHUB_OUTPUT
+          echo "avrhash=$(git ls-remote https://git.rwth-aachen.de/doriank/avrsimv2.git HEAD | head -c 12)" >> $GITHUB_OUTPUT
+        shell: bash
+      - name: Extract metadata (tags, labels) for Docker
+        id: meta
+        uses: docker/metadata-action@9ec57ed1fcdbf14dcef7dfbe97b2010124a938b7
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+      - name: Cache Simulator
+        id: cachesim2
+        uses: actions/cache@v3
+        with:
+          path: /dev/null
+          lookup-only: true
+          key: ${{ steps.meta.outputs.tags }}-${{ steps.get-ver.outputs.shash }}-${{ steps.get-ver.outputs.avrhash }}-${{ hashFiles('Dockerfile') }}
+      - name: Build and push Docker image
+        id: buildpush
+        if: steps.cachesim2.outputs.cache-hit != 'true'
+        uses: docker/build-push-action@f2a1d5e99d037542a71f64918e516c093c6f3fc4
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+  buildindocker:
+    needs: makedocker
+    runs-on: ubuntu-latest
+    container: ${{ needs.makedocker.outputs.imgurl }}
+    strategy:
+      matrix:
+        project_directory:
+          - './SPOS'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Build Project
+        run: |
+          ls 
+          cd "${{ matrix.project_directory }}"
+          make all
+  dockertest:
+    timeout-minutes: 10
+    runs-on: ubuntu-latest
+    container: ${{ needs.makedocker.outputs.imgurl }}
+    needs: [buildindocker, makedocker]
+    strategy:
+      max-parallel: 0
+      fail-fast: true
+      matrix:
+        test_path:
+          # v2
+          - 'v2/1.1 Unittest os_exec/progs.c'
+          - 'v2/1.2 Unittest os_initScheduler/progs.c'
+          #- 'v2/2 Error/progs.c'
+          #- 'v2/3 Critical/progs.c'
+          - 'v2/4 Multiple/progs.c'
+          - 'v2/5 Resume/progs.c'
+          #- 'v2/6 Stack Consistency/progs.c'
+          - 'v2/7 Scheduling Strategies/progs.c'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      - name: Run
+        run: |
+          ls -a
+          pwd
+          cd SPOS/
+          ls -a
+          TEST_PATH="${{ matrix.test_path }}" bash build_run_sim.sh
